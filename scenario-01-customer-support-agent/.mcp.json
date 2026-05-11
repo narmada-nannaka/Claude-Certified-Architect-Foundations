@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "customer-support": {
+      "command": "python",
+      "args": ["-m", "src.mcp_server"],
+      "cwd": "${workspaceFolder}/scenario-01-customer-support-agent",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/scenario-01-customer-support-agent"
+      }
+    }
+  }
+}
