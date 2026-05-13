@@ -111,6 +111,15 @@ def normalize_customer_result(result: dict) -> dict:
         "__raw_full_customer": full_record,
     }
 
+def normalize_shipment_result(result: dict) -> dict:
+    """Normalize track_shipment result: epoch → ISO; preserve raw."""
+    if "tracking" not in result:
+        return result
+    tracking = dict(result["tracking"])
+    if "last_scan_at_epoch" in tracking:
+        tracking["last_scan_iso"] = epoch_to_iso(tracking["last_scan_at_epoch"])
+        tracking["__raw_last_scan_at_epoch"] = tracking.pop("last_scan_at_epoch")
+    return {**result, "tracking": tracking}
 
 # --- The PostToolUse hook itself ---
 
@@ -120,6 +129,7 @@ POST_TOOL_USE_NORMALIZERS = {
     "lookup_order": normalize_order_result,
     "process_refund": normalize_refund_result,
     "get_customer": normalize_customer_result,
+    "track_shipment": normalize_shipment_result,
 }
 
 

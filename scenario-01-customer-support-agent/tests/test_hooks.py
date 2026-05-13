@@ -11,6 +11,7 @@ from src.hooks import (
     normalize_customer_result,
     normalize_order_result,
     normalize_refund_result,
+    normalize_shipment_result,
     post_tool_use_hook,
 )
 
@@ -149,3 +150,9 @@ def test_dispatcher_skips_error_responses_even_for_registered_tools():
     # Even though lookup_order has a normalizer, errors must pass through.
     result = post_tool_use_hook("lookup_order", err)
     assert result == err
+
+def test_normalize_shipment_result():
+    raw = {"tracking": {"order_id": "O-5005", "last_scan_at_epoch": 1720224000}}
+    normalized = normalize_shipment_result(raw)
+    assert normalized["tracking"]["last_scan_iso"] == "2024-07-06T00:00:00+00:00"
+    assert "last_scan_at_epoch" not in normalized["tracking"]
