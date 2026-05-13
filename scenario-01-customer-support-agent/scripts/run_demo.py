@@ -18,11 +18,15 @@ from src.agent import run_agent
 def print_run(run):
     print(f"\n[iterations: {run.iterations}, stop_reason: {run.stop_reason}]")
     for tc in run.tool_calls:
-        result_summary = (
-            "ERROR " + tc["result"].get("errorCategory", "")
-            if tc["result"].get("isError") else "ok"
-        )
-        print(f"  → {tc['name']}({_short_input(tc['input'])}) [{result_summary}]")
+        if tc.get("blocked_by_gate"):
+            tag = "BLOCKED " + tc["result"]["errorCategory"]
+        elif tc["result"].get("isError"):
+            tag = "ERROR " + tc["result"].get("errorCategory", "")
+        else:
+            tag = "ok"
+        print(f"  → {tc['name']}({_short_input(tc['input'])}) [{tag}]")
+    if run.gate_violations:
+        print(f"  ⚠ gate violations this turn: {len(run.gate_violations)}")
     print(f"\nAgent: {run.final_text}")
 
 
@@ -33,6 +37,7 @@ def _short_input(d: dict) -> str:
 
 def main():
     history = []
+    session = None #created on first call
     print("Customer Support Agent demo. Type 'quit' to exit.\n")
     while True:
         try:
@@ -43,7 +48,7 @@ def main():
         if not user or user.lower() in {"quit", "exit"}:
             break
 
-        run, history = run_agent(user, history)
+        run, history, session = run_agent(user, history, session)
         print_run(run)
 
 

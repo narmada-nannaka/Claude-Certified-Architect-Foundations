@@ -8,6 +8,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from src.agent import run_agent, AgentRun
+from src.hooks import SessionState, update_session_from_result
 
 
 def _mock_response(stop_reason: str, content_blocks: list):
@@ -43,7 +44,7 @@ def test_loop_terminates_on_end_turn():
             content_blocks=[_text_block("Hello! How can I help?")],
         )
 
-        run, _ = run_agent("Hi there")
+        run, _, _ = run_agent("Hi there")
 
         assert run.stop_reason == "end_turn"
         assert run.iterations == 1
@@ -70,7 +71,7 @@ def test_loop_continues_on_tool_use_then_terminates():
 
         client.messages.create.side_effect = [first_response, second_response]
 
-        run, history = run_agent("I'm C-1001")
+        run, history, _ = run_agent("I'm C-1001")
 
         assert run.iterations == 2
         assert len(run.tool_calls) == 1
@@ -103,7 +104,7 @@ def test_loop_handles_unknown_tool_gracefully():
             ),
         ]
 
-        run, _ = run_agent("Do the thing")
+        run, _, _ = run_agent("Do the thing")
 
         # The error result was reported back to the model, which then
         # produced a graceful end_turn response.
@@ -125,7 +126,7 @@ def test_safety_cap_engages_only_in_runaway_scenarios():
         )
         client.messages.create.return_value = infinite_tool_response
 
-        run, _ = run_agent("Trigger infinite loop")
+        run, _, _ = run_agent("Trigger infinite loop")
 
         # The cap engaged, but did so AFTER many iterations.
         # If iterations == 1 or 2, the cap is incorrectly the primary stop.
@@ -154,9 +155,46 @@ def test_parallel_tool_calls_in_single_response_are_all_executed():
             ),
         ]
 
-        run, _ = run_agent("Check both my recent orders")
+        run, _, _ = run_agent("Check both my recent orders")
 
         assert run.iterations == 2
         assert len(run.tool_calls) == 2
         assert run.tool_calls[0]["name"] == "lookup_order"
         assert run.tool_calls[1]["name"] == "lookup_order"
+
+def test_post_tool_use_hook_fires_for_normalized_tools():
+    """End-to-end: a tool returns a raw epoch, the hook normalizes it,
+    and the agent's tool_calls record reflects the normalized result.
+
+    This catches the bug where someone wires the hook incorrectly and
+    it silently does nothing.
+    """
+    with patch("src.agent.Anthropic") as MockAnthropic:
+        client = MockAnthropic.return_value
+
+        client.messages.create.side_effect = [
+            _mock_response(
+                stop_reason="tool_use",
+                content_blocks=[_tool_use_block("tu_1", "lookup_order", {"order_id": "O-5001"})],
+            ),
+            _mock_response(
+                stop_reason="end_turn",
+                content_blocks=[_text_block("Order found.")],
+            ),
+        ]
+
+        # Pre-verify a customer so the PreToolUse gate allows lookup_order.
+        session = SessionState()
+        update_session_from_result(
+            "get_customer",
+            {"customer": {"id": "C-1001", "name": "Ada Lovelace"}, "verified": True},
+            session,
+        )
+        run, _, _ = run_agent("Look up O-5001", session=session)
+
+        # The tool_call record should show the normalized result, not the raw one.
+        order_call = run.tool_calls[0]
+        order = order_call["result"]["order"]
+        assert "placed_at_iso" in order, "Hook did not run"
+        assert "placed_at_epoch" not in order, "Hook ran but didn't strip raw field"
+        assert "__raw_placed_at_epoch" in order, "Hook ran but didn't preserve raw"

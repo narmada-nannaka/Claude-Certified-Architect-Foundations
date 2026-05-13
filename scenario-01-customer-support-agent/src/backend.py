@@ -29,7 +29,7 @@ CUSTOMERS = {
     "C-1003": {
         "id": "C-1003",
         "name": "Ada Lovelace",
-        "email": "test1001@example.com",
+        "email": "test1003@example.com",
         "verified_at": "2024-03-12T14:22:00Z",   # ISO 8601
         "tier": "gold",
     },

@@ -26,6 +26,13 @@ from .mcp_server import (
 )
 from .prompts import SYSTEM_PROMPT
 
+from .hooks import (
+    SessionState,
+    post_tool_use_hook,
+    pre_tool_use_hook,
+    update_session_from_result,
+)
+
 load_dotenv()
 
 # Registry of tool names → callable implementations.
@@ -108,25 +115,33 @@ class AgentRun:
     tool_calls: list[dict] = field(default_factory=list)
     stop_reason: str = ""
     hit_safety_cap: bool = False
+    gate_violations: list[dict] = field(default_factory=list)
 
 
 def run_agent(user_message: str,
-              conversation_history: list[dict] | None = None) -> tuple[AgentRun, list[dict]]:
+              conversation_history: list[dict] | None = None,
+              session: SessionState | None = None,
+              ) -> tuple[AgentRun, list[dict], SessionState]:
     """Run the agentic loop until the model signals end_turn.
 
     Args:
         user_message: the new user input for this turn.
         conversation_history: prior messages (assistant + user + tool_result).
             Pass None for a fresh session.
+        session: pre-session mutable state. Pass None for a fresh session;
+            Pass the returned SessionState back in to continue.
 
     Returns:
-        (AgentRun summary, updated conversation_history).
+        (AgentRun summary, updated conversation_history, session_state).
         The updated history can be passed to the next call to continue
         the conversation.
     """
     client = Anthropic()
     messages = list(conversation_history or [])
     messages.append({"role": "user", "content": user_message})
+
+    if session is None:
+        session = SessionState()
 
     run = AgentRun()
 
@@ -184,32 +199,49 @@ def run_agent(user_message: str,
                 tool_input = block.input
                 tool_use_id = block.id
 
-                # Dispatch to the implementation.
-                if tool_name not in TOOL_IMPLEMENTATIONS:
-                    result = {
-                        "isError": True,
-                        "errorCategory": "validation",
-                        "isRetryable": False,
-                        "message": f"Unknown tool: {tool_name}",
-                    }
-                else:
-                    try:
-                        result = TOOL_IMPLEMENTATIONS[tool_name](**tool_input)
-                    except Exception as exc:
-                        # Catch-all: turn any unexpected exception into a
-                        # transient error so the agent can decide what to do.
+                # === PReToolUse hook ===
+                allow, replacement = pre_tool_use_hook(tool_name, tool_input, session)
+
+                if not allow:
+                    # Hook blocked the call. Use the replacement as the result. 
+                    result = replacement
+                    # Skip PostToolUse normalization for the replacment - 
+                    # its already a structured error and shouldn't be reshaped. 
+                
+                else: 
+                    # Hook allowed the call. Dispatch to the implementation.
+                    if tool_name not in TOOL_IMPLEMENTATIONS:
                         result = {
                             "isError": True,
-                            "errorCategory": "transient",
-                            "isRetryable": True,
-                            "message": "Tool raised an unexpected exception.",
-                            "detail": str(exc),
+                            "errorCategory": "validation",
+                            "isRetryable": False,
+                            "message": f"Unknown tool: {tool_name}",
                         }
+                    else:
+                        try:
+                            result = TOOL_IMPLEMENTATIONS[tool_name](**tool_input)
+                        except Exception as exc:
+                            # Catch-all: turn any unexpected exception into a
+                            # transient error so the agent can decide what to do.
+                            result = {
+                                "isError": True,
+                                "errorCategory": "transient",
+                                "isRetryable": True,
+                                "message": "Tool raised an unexpected exception.",
+                                "detail": str(exc),
+                            }
 
+                    # === PostToolUse hook ===
+                    result = post_tool_use_hook(tool_name, result)
+
+                    # === Session state update ===
+                    update_session_from_result(tool_name, result, session)
+                
                 run.tool_calls.append({
                     "name": tool_name,
                     "input": tool_input,
                     "result": result,
+                    "blocked_by_gate": not allow, #observability
                 })
 
                 tool_results.append({
@@ -235,7 +267,9 @@ def run_agent(user_message: str,
         run.final_text = _extract_text(response.content)
         break
 
-    return run, messages
+    # Surface gate violations on the run summary for observability
+    run.gate_violations = list(session.gate_violations)
+    return run, messages, session
 
 
 def _extract_text(content_blocks: list[Any]) -> str:
