@@ -197,6 +197,41 @@ def escalate_to_human(
         },
     }
 
+@mcp.tool()
+def track_shipment(order_id: str) -> dict:
+    """Get the current shipment tracking details for an order in transit.
+
+    Use this tool when the customer asks "where is my package", "when will
+    my order arrive", or similar shipping-status questions. This tool ONLY
+    returns useful data for orders that are currently in transit; for
+    delivered or pending orders it returns a validation error.
+
+    Input:
+      - order_id: format "O-NNNN"
+
+    Returns the carrier name, tracking number, last scan location, and
+    estimated delivery date (ISO 8601).
+
+    Do NOT use this tool to check whether an order exists — use lookup_order
+    for that. Do NOT use this tool for delivered orders — their status is
+    already visible in lookup_order's response.
+    """
+    if not order_id or not order_id.startswith("O-"):
+        return validation_error(
+            "order_id must be in format 'O-NNNN'.",
+            detail=f"Received: {order_id!r}",
+        )
+
+    tracking = backend.get_shipment_tracking(order_id)
+    if not tracking:
+        return validation_error(
+            f"No active shipment tracking for {order_id}. The order may "
+            f"already be delivered or not yet shipped.",
+            detail="track_shipment requires an in-transit order.",
+        )
+
+    return {"tracking": tracking}
+
 
 if __name__ == "__main__":
     mcp.run()

@@ -152,7 +152,7 @@ def post_tool_use_hook(tool_name: str, tool_result: dict) -> dict:
 
 # Tools that require a verified customer in session before they can run.
 # Centralized so adding a new gated tool is one line, not a code change.
-GATED_TOOLS = {"lookup_order", "process_refund"}
+GATED_TOOLS = {"lookup_order", "process_refund", "track_shipment"}
 
 # Refund cap policy (read from env in real systems; hardcoded for demos).
 REFUND_LIMIT_USD = 500.0

@@ -23,6 +23,7 @@ from .mcp_server import (
     get_customer,
     lookup_order,
     process_refund,
+    track_shipment,
 )
 from .prompts import SYSTEM_PROMPT
 
@@ -44,6 +45,7 @@ TOOL_IMPLEMENTATIONS = {
     "lookup_order": lookup_order,
     "process_refund": process_refund,
     "escalate_to_human": escalate_to_human,
+    "track_shipment": track_shipment,
 }
 
 # Tool schemas in Claude's tool-use format.
@@ -96,6 +98,15 @@ TOOL_SCHEMAS = [
                 "refund_amount_usd": {"type": "number"},
             },
             "required": ["customer_id", "summary", "root_cause", "recommended_action"],
+        },
+    },
+    {
+        "name": "track_shipment",
+        "description": track_shipment.__doc__,
+        "input_schema": {
+            "type": "object",
+            "properties": {"order_id": {"type": "string"}},
+            "required": ["order_id"],
         },
     },
 ]

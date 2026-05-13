@@ -28,10 +28,10 @@ CUSTOMERS = {
     },
     "C-1003": {
         "id": "C-1003",
-        "name": "Ada Lovelace",
+        "name": "Grace Hopper",
         "email": "test1003@example.com",
         "verified_at": "2024-03-12T14:22:00Z",   # ISO 8601
-        "tier": "gold",
+        "tier": "standard",
     },
 }
 
@@ -59,6 +59,42 @@ ORDERS = {
         "placed_at_epoch": 1715184000,
         "status": "delivered",
         "items": [{"sku": "PREMIUM-C", "qty": 1, "price_usd": 1299.00}],
+    },
+    "O-5004": {
+        "order_id": "O-5004",
+        "customer_id": "C-1003",
+        "amount_usd": 75.00,
+        "placed_at_epoch": 1717718400,   # 2024-06-07
+        "status": "delivered",
+        "items": [{"sku": "SHIRT-RED-M", "qty": 1, "price_usd": 75.00}],
+    },
+    "O-5005": {
+        "order_id": "O-5005",
+        "customer_id": "C-1003",
+        "amount_usd": 120.00,
+        "placed_at_epoch": 1719964800,   # 2024-07-03
+        "status": "in_transit",
+        "items": [{"sku": "GADGET-D", "qty": 1, "price_usd": 120.00}],
+    },
+    "O-5006": {
+        "order_id": "O-5006",
+        "customer_id": "C-1003",
+        "amount_usd": 50.00,
+        "placed_at_epoch": 1722643200,   # 2024-08-03
+        "status": "delivered",
+        "items": [{"sku": "ACCESSORY-X", "qty": 2, "price_usd": 25.00}],
+    },
+}
+
+SHIPMENT_TRACKING = {
+    "O-5005": {
+        "order_id": "O-5005",
+        "carrier": "FedEx",
+        "tracking_number": "1Z999AA10123456784",
+        "status": "in_transit",
+        "last_scan": "Memphis, TN",
+        "last_scan_at_epoch": 1720224000,  # 2024-07-06
+        "estimated_delivery_iso": "2024-07-10T17:00:00Z",
     },
 }
 
@@ -93,3 +129,6 @@ def create_refund(order_id: str, amount_usd: float) -> dict:
         "status_code": 0,  # numeric, will be normalized
         "created_at_epoch": int(datetime.now(timezone.utc).timestamp()),
     }
+
+def get_shipment_tracking(order_id: str):
+    return SHIPMENT_TRACKING.get(order_id)
