@@ -38,6 +38,7 @@ based on its declared `paths:` glob patterns — see each file for details.
 @import .claude/rules/api.md
 @import .claude/rules/models.md
 @import .claude/rules/testing.md
+@import .claude/rules/security.md
 
 ## When proposing changes
 

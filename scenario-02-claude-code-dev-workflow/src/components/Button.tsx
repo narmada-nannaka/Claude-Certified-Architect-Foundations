@@ -9,7 +9,8 @@ interface ButtonProps {
 export function Button({ label, onClick, variant = "primary" }: ButtonProps) {
   const [isPressed, setIsPressed] = useState(false);
 
-  const handleClick = () => {
+  const handleClick = (event: any) => {
+    console.log("Button clicked", event);
     setIsPressed(true);
     onClick();
     setTimeout(() => setIsPressed(false), 200);
