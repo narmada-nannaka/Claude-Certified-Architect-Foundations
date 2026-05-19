@@ -40,12 +40,32 @@ based on its declared `paths:` glob patterns — see each file for details.
 @import .claude/rules/testing.md
 @import .claude/rules/security.md
 
-## When proposing changes
+## When to use plan mode vs direct execution
 
-- For changes touching more than 5 files, enter plan mode before making
-  edits. This is non-negotiable for cross-cutting changes.
-- Test files must be updated in the same commit as the code they test.
-- Never modify generated files (e.g., `*.gen.ts`, anything under `dist/`).
+Plan mode is required for tasks where the answer to "how should this be
+done?" isn't obvious. Use plan mode when:
+
+- The change touches more than 5 files OR introduces architectural
+  boundaries (new services, new modules, new shared abstractions).
+- Multiple valid approaches exist and the right choice depends on
+  team conventions, performance characteristics, or future flexibility.
+- The work involves dependency analysis (e.g., "what else uses this
+  function?") that determines scope.
+- The work is a library migration, framework swap, or schema change.
+- The request is under-specified ("add caching to the API layer") and
+  the design choices are part of the task.
+
+Direct execution is preferred when:
+
+- The change is well-scoped (one file or an obviously-related cluster).
+- The implementation approach is unambiguous from the request.
+- Tests, lint, or type-check provide a clear correctness criterion.
+- The blast radius of a wrong attempt is small.
+
+When in doubt, default to plan mode for the planning phase, then
+explicitly transition to direct execution to carry out the plan. Don't
+try to stay in plan mode through the execution — it disables write
+tools and exists specifically to be a separate phase.
 
 ## How to ask for help
 

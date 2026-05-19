@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface ButtonProps {
   label: string;
@@ -8,12 +8,20 @@ interface ButtonProps {
 
 export function Button({ label, onClick, variant = "primary" }: ButtonProps) {
   const [isPressed, setIsPressed] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleClick = (event: any) => {
-    console.log("Button clicked", event);
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setIsPressed(true);
     onClick();
-    setTimeout(() => setIsPressed(false), 200);
+    timeoutRef.current = setTimeout(() => setIsPressed(false), 200);
   };
 
   return (
