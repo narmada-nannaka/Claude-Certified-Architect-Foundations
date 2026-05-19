@@ -72,3 +72,31 @@ tools and exists specifically to be a separate phase.
 If a question is ambiguous, use the interview pattern: ask 2-3 clarifying
 questions before implementing. Don't guess on requirements that affect
 more than one file.
+
+## Working with Claude effectively
+
+When iterating on tasks, choose the refinement technique that matches
+the symptom.
+
+### When output is inconsistent or off-shape
+
+Provide 2-3 concrete input/output examples rather than describing the
+transformation in prose. Examples remove interpretation latitude.
+
+### When implementing something with subtle correctness criteria
+
+Have Claude write a test suite first, then iterate by sharing test
+failures. The tests give the iteration loop a definite target.
+
+### When working in an unfamiliar domain or undocumented area
+
+Ask Claude to ask 3-5 clarifying questions before implementing.
+Common hidden decisions: error handling philosophy, performance
+budgets, naming conventions, integration boundaries.
+
+### When you have multiple issues to address
+
+- Issues that interact (must be fixed consistently with each other):
+  send them all in one detailed message.
+- Issues that are independent: address them one at a time so each
+  can be verified cleanly.
