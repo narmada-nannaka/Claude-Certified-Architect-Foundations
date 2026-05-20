@@ -1,11 +1,10 @@
-"""CLI runner for the coordinator + synthesis pipeline.
+"""CLI runner for the full research pipeline.
 
 Usage:
     python scripts/run_research.py "the impact of AI on creative industries"
 
-Now runs through to synthesis, producing the full structured report.
+Now uses the pipeline with iterative gap-fill refinement.
 """
-import json
 import sys
 from pathlib import Path
 
@@ -14,9 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from src.coordinator import run_coordinator
-from src.synthesis import run_synthesis
-
+from src.pipeline import run_research_pipeline
 
 def main():
     if len(sys.argv) < 2:
@@ -25,55 +22,57 @@ def main():
     else:
         topic = " ".join(sys.argv[1:])
 
-    print(f"\n=== Research session: {topic} ===\n")
+    print(f"\n=== Research pipeline: {topic} ===\n")
+    result = run_research_pipeline(topic)
 
-    # Stage 1: coordinator investigates
-    print("Stage 1: coordinator decomposes and delegates...\n")
-    session = run_coordinator(topic)
+    print(f"Refinement iterations: {result.refinement_iterations}")
+    if result.hit_iteration_cap:
+        print("⚠ Hit iteration cap — some gaps remain unfilled")
+    print(f"Total subagent invocations: {len(result.all_invocations)}")
+    print(f"Total findings collected: {len(result.all_findings)}\n")
 
-    print(f"Coordinator iterations: {session.coordinator_run.iterations}")
-    print(f"Subagent invocations: {len(session.subagent_invocations)}")
-    print(f"Total findings: {len(session.all_findings)}")
-    print(f"Domains covered: {sorted({f['domain'] for f in session.all_findings})}\n")
+    print("--- Gap history across rounds ---")
+    for i, gaps in enumerate(result.gap_history):
+        if gaps:
+            domains = [g["domain"] for g in gaps]
+            print(f"  Round {i}: {len(gaps)} gaps → {domains}")
+        else:
+            print(f"  Round {i}: 0 gaps (terminated)")
 
-    if not session.all_findings:
-        print("No findings collected. Cannot proceed to synthesis.")
+    print("\n--- Initial vs gap-fill invocations ---")
+    initial = [i for i in result.all_invocations if i.get("phase") != "gap_fill"]
+    gap_fills = [i for i in result.all_invocations if i.get("phase") == "gap_fill"]
+    print(f"  Initial investigation: {len(initial)}")
+    print(f"  Gap-fill investigation: {len(gap_fills)}")
+
+    if not result.final_report:
+        print("\n(No final report produced.)")
         return
 
-    # Stage 2: synthesis
-    print("Stage 2: synthesis agent produces structured report...\n")
-    result = run_synthesis(topic, session.all_findings)
-
-    if result.is_error:
-        print(f"Synthesis failed: {result.error_detail}")
-        return
-
-    print("=== Structured Report ===\n")
-    print(f"TOPIC: {result.report['topic']}\n")
-    print(f"EXECUTIVE SUMMARY: {result.report['executive_summary']}\n")
+    print("\n=== Final Structured Report ===\n")
+    print(f"TOPIC: {result.final_report['topic']}\n")
+    print(f"EXECUTIVE SUMMARY: {result.final_report['executive_summary']}\n")
 
     print("DOMAIN SECTIONS:")
-    for section in result.report["domain_sections"]:
+    for section in result.final_report["domain_sections"]:
         print(f"\n  [{section['domain']}]")
-        for f in section["key_findings"]:
+        for f in section["key_findings"][:3]:  # cap display
             print(f"    • {f['claim']}")
-            print(f"      -> {f['source_name']} ({f['publication_date_iso']})")
+            print(f"      → {f['source_name']} ({f['publication_date_iso']})")
 
-    if result.report["conflicts"]:
+    if result.final_report["conflicts"]:
         print("\nCONFLICTS:")
-        for c in result.report["conflicts"]:
+        for c in result.final_report["conflicts"]:
             print(f"  • {c['topic']}")
-            print(f"    A: {c['claim_a']} ({c['source_a']}, {c.get('date_a', '')})")
-            print(f"    B: {c['claim_b']} ({c['source_b']}, {c.get('date_b', '')})")
-            if c.get("resolution_note"):
-                print(f"    Note: {c['resolution_note']}")
+            print(f"    A: {c['claim_a']} ({c['source_a']})")
+            print(f"    B: {c['claim_b']} ({c['source_b']})")
 
-    if result.report["coverage_gaps"]:
-        print("\nCOVERAGE GAPS:")
-        for g in result.report["coverage_gaps"]:
+    if result.final_report["coverage_gaps"]:
+        print("\nREMAINING GAPS:")
+        for g in result.final_report["coverage_gaps"]:
             print(f"  • {g['domain']}: {g['rationale']}")
     else:
-        print("\n(No coverage gaps identified.)")
+        print("\n✓ All coverage gaps filled.")
 
 
 if __name__ == "__main__":
