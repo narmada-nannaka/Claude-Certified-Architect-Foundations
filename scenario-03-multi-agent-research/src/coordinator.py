@@ -156,8 +156,10 @@ def _task_tool_implementation(tool_input: dict) -> dict:
             "isError": True,
             "errorCategory": result.error_category or "transient",
             "isRetryable": result.error_category == "transient",
-            "message": result.error_detail,
             "subagent": agent_name,
+            "attempted_prompt": prompt[:200],
+            "coverage_note": result.coverage_note,  # contains alternatives
+            "error_detail": result.error_detail,
         }
 
     # Pack the subagent's result into the tool_result that the

@@ -18,6 +18,72 @@ from typing import Callable
 
 from . import fake_data
 
+# Simulated-failure configuration. Set via environment variable or
+# programmatically in tests. In production this wouldn't exist —
+# real subagent failures come from real timeouts, rate limits, etc.
+# We simulate them here so the structured-error-propagation pattern
+# can be exercised and tested deterministically.
+SIMULATED_FAILURES: dict[str, str] = {}
+# Format: {"web_research": "timeout"} forces that subagent to "fail"
+# with a timeout-shaped structured error.
+
+def _simulate_failure_if_configured(agent_name: str, prompt: str) -> SubagentResult | None:
+    """Check if this invocation should simulate a failure.
+
+    Returns a SubagentResult with structured error context if so,
+    or None if the call should proceed normally.
+
+    Per Task 5.3, structured error context includes failure type,
+    attempted query, partial results (if any), and potential
+    alternative approaches.
+    """
+    if agent_name not in SIMULATED_FAILURES:
+        return None
+
+    failure_kind = SIMULATED_FAILURES[agent_name]
+
+    if failure_kind == "timeout":
+        return SubagentResult(
+            findings=[],
+            coverage_note=(
+                f"Attempted to search for: {prompt[:100]}. "
+                f"The search timed out after the configured limit. "
+                f"Partial results: none captured before timeout. "
+                f"Alternative approaches: retry with narrower query, "
+                f"or delegate to document_analysis instead."
+            ),
+            is_error=True,
+            error_category="transient",
+            error_detail=(
+                f"Web search timed out for query: '{prompt[:100]}'. "
+                f"No partial results retrieved. Suggest retry with "
+                f"more specific terms or fallback to document_analysis."
+            ),
+        )
+
+    if failure_kind == "rate_limit":
+        return SubagentResult(
+            findings=[],
+            coverage_note=(
+                f"Attempted to analyze documents for: {prompt[:100]}. "
+                f"Rate limit reached on document API. Retry after 60 seconds, "
+                f"or fall back to web_research for general coverage."
+            ),
+            is_error=True,
+            error_category="transient",
+            error_detail=(
+                f"Document API rate-limited. Retry-after suggested: 60s."
+            ),
+        )
+
+    # Unknown simulated failure kind — treat as generic
+    return SubagentResult(
+        findings=[],
+        coverage_note="Unknown simulated failure",
+        is_error=True,
+        error_category="transient",
+        error_detail=f"Simulated failure: {failure_kind}",
+    )
 
 # --- Subagent input/output contracts ---
 
@@ -89,6 +155,12 @@ def _run_web_research(prompt: str) -> SubagentResult:
     Production agents would use the model to parse the prompt; we
     keep it deterministic here for testing.
     """
+
+    # Check for configured simulated failure FIRST
+    sim_failure = _simulate_failure_if_configured("web_research", prompt)
+    if sim_failure is not None:
+        return sim_failure
+
     # Extract a search query and optional domain hint from the prompt
     # Real implementation: a model call. For now: parse pragma-style hints.
     query = prompt
@@ -119,6 +191,10 @@ def _run_document_analysis(prompt: str) -> SubagentResult:
     Per Task 2.3, access ONLY to analyze_documents. Same scoping
     rationale as web_research.
     """
+    sim_failure = _simulate_failure_if_configured("document_analysis", prompt)
+    if sim_failure is not None:
+        return sim_failure
+    
     query = prompt
     domain_hint = None
     if "domain:" in prompt.lower():
