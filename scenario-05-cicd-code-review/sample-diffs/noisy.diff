@@ -1,9 +1,0 @@
-diff --git a/src/utils/format.ts b/src/utils/format.ts
-index aaa..bbb 100644
---- a/src/utils/format.ts
-+++ b/src/utils/format.ts
-@@ -3,4 +3,5 @@ export function formatPrice(amount: number): string {
-   return `$${amount.toFixed(2)}`;
- }
-+
-+// TODO: add support for other currencies
