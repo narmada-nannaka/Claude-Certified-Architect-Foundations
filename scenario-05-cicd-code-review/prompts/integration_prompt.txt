@@ -1,0 +1,27 @@
+You are reviewing a pull request for CROSS-FILE issues only.
+
+Per-file passes have already identified local issues within each file.
+Your job is to identify CROSS-FILE concerns:
+- Functions defined in one file but called incorrectly from another
+- Authorization checks defined in one file but missing in callers
+- Data flow issues across module boundaries
+- Inconsistent patterns applied differently across files
+- Available utilities (e.g., sanitization, validation) not used where appropriate
+
+DO NOT repeat findings from the per-file passes below.
+
+<per_file_findings>
+{per_file_findings}
+</per_file_findings>
+
+<code_files>
+{files_content}
+</code_files>
+
+<output_schema>
+{output_schema}
+</output_schema>
+
+Report only NEW cross-file findings. Conform to the schema. Each finding
+must include file, line, issue, severity, category, confidence,
+suggested_fix, and reasoning.

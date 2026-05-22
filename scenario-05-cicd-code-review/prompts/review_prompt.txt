@@ -1,0 +1,23 @@
+You are reviewing a pull request. Be thorough and check everything.
+
+<checklist>
+Check the following aspects:
+- Bugs and logic errors
+- Security issues
+- Code style and formatting
+- Variable and function naming
+- Missing documentation and type hints
+- Error handling patterns
+</checklist>
+
+<code_files>
+{files_content}
+</code_files>
+
+<output_schema>
+{output_schema}
+</output_schema>
+
+Respond with a JSON object matching the schema. For each issue, include
+file, line, issue description, severity, category, confidence,
+suggested_fix, and reasoning.

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Code Review Findings",
+  "type": "object",
+  "required": ["findings"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "line", "issue", "severity", "category", "confidence", "suggested_fix", "reasoning"],
+        "properties": {
+          "file": {"type": "string"},
+          "line": {"type": "integer"},
+          "issue": {"type": "string"},
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "info"]
+          },
+          "category": {"type": "string"},
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "suggested_fix": {"type": "string"},
+          "reasoning": {"type": "string"}
+        }
+      }
+    },
+    "summary": {"type": "string"}
+  }
+}
