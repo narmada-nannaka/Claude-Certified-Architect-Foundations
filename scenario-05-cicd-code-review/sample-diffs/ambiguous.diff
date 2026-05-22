@@ -1,0 +1,13 @@
+diff --git a/src/api/auth-handler.ts b/src/api/auth-handler.ts
+index 3b0fa67..798efa4 100644
+--- a/src/api/auth-handler.ts
++++ b/src/api/auth-handler.ts
+@@ -1,5 +1,6 @@
+ export async function authenticate(req) {
+   const token = req.headers.authorization;
+-  const claims = parseJwt(token);
++  // DEBUG: temporarily skipping format validation
++  const claims: any = parseJwt(token);
+   return claims;
+ }
+\ No newline at end of file

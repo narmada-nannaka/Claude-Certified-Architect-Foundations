@@ -25,6 +25,19 @@ Write-Host "Scenario root: $ScenarioRoot"
 New-Item -ItemType Directory -Path "src/api", "src/utils", "sample-diffs" -Force | Out-Null
 
 
+# Write a file as UTF-8 without BOM.
+# Set-Content -Encoding UTF8 writes a BOM in PowerShell 5.1, which leaks
+# into the diff's context lines and can confuse git apply.
+function Write-UTF8NoBom {
+    param([string]$Path, [string]$Content)
+    [System.IO.File]::WriteAllText(
+        [System.IO.Path]::GetFullPath($Path),
+        $Content,
+        (New-Object System.Text.UTF8Encoding $false)
+    )
+}
+
+
 function Generate-Diff {
     <#
     .SYNOPSIS
@@ -40,13 +53,14 @@ function Generate-Diff {
     Write-Host ""
     Write-Host "Generating $OutputDiff..."
 
-    # Write and commit the baseline so git has something to diff against
-    Set-Content -Path $FilePath -Value $Baseline -Encoding UTF8
-    git add $FilePath 2>&1 | Out-Null
-    git commit -m "fixture: baseline for $OutputDiff" 2>&1 | Out-Null
+    # Write and commit the baseline so git has something to diff against.
+    # Use no-BOM UTF-8 so context lines in the diff are clean.
+    Write-UTF8NoBom -Path $FilePath -Content $Baseline
+    git add $FilePath | Out-Null
+    git commit -m "fixture: baseline for $OutputDiff" | Out-Null
 
     # Write the modified version (entire content, not a transformation)
-    Set-Content -Path $FilePath -Value $Modified -Encoding UTF8
+    Write-UTF8NoBom -Path $FilePath -Content $Modified
 
     # Verify git actually sees a change. If not, the baseline and modified
     # are identical and we have a bug in our fixture definitions.
@@ -55,24 +69,33 @@ function Generate-Diff {
         throw "No changes detected in $FilePath. Baseline and modified may be identical."
     }
 
-    # Capture the diff via git itself (guaranteed valid hunk headers)
-    $diff = git diff $FilePath
-    if ([string]::IsNullOrWhiteSpace($diff)) {
+    # --relative strips the repo-root prefix so paths in the diff are
+    # relative to the scenario root (e.g. src/api/users.ts, not
+    # scenario-05-cicd-code-review/src/api/users.ts). That is required
+    # for `git apply --no-index` to resolve the files correctly when run
+    # from this directory.
+    #
+    # PowerShell captures external-command output as a string array (one
+    # element per line). Join with LF before writing so the diff file
+    # contains real newlines rather than a single space-joined line.
+    $diffLines = git diff --relative $FilePath
+    if (-not $diffLines) {
         throw "git diff produced no output for $FilePath."
     }
+    $diff = ($diffLines -join "`n") + "`n"
 
-    Set-Content -Path $OutputDiff -Value $diff -Encoding UTF8
+    Write-UTF8NoBom -Path $OutputDiff -Content $diff
 
     # Reset the working file
-    git checkout $FilePath 2>&1 | Out-Null
+    git checkout $FilePath | Out-Null
 
     # Validate the generated diff applies cleanly
-    git apply --no-index --check $OutputDiff 2>&1 | Out-Null
+    git apply --no-index --check $OutputDiff | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "Generated diff $OutputDiff fails git apply --check"
     }
 
-    Write-Host "  ✓ $OutputDiff valid"
+    Write-Host "  [OK] $OutputDiff valid"
 }
 
 

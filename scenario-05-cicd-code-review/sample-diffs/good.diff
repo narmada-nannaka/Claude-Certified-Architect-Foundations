@@ -1,0 +1,12 @@
+diff --git a/src/api/users.ts b/src/api/users.ts
+index 3659631..0aba158 100644
+--- a/src/api/users.ts
++++ b/src/api/users.ts
+@@ -1,5 +1,5 @@
+ export async function getUser(req) {
+   const id = req.params.id;
+-  const user = await db.query("SELECT * FROM users WHERE id = ?", [id]);
++  const user = await db.query(`SELECT * FROM users WHERE id = '${id}'`);
+   return user;
+ }
+\ No newline at end of file

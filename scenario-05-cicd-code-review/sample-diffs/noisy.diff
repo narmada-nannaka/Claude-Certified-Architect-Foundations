@@ -1,0 +1,13 @@
+diff --git a/src/utils/format.ts b/src/utils/format.ts
+index 145cd05..061622a 100644
+--- a/src/utils/format.ts
++++ b/src/utils/format.ts
+@@ -1,3 +1,5 @@
+ export function formatPrice(amount) {
+   return `$${amount.toFixed(2)}`;
+-}
+\ No newline at end of file
++}
++
++// TODO: add support for other currencies
+\ No newline at end of file
