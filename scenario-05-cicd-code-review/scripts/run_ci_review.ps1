@@ -1,21 +1,21 @@
 <#
 .SYNOPSIS
-    CI runner for Claude Code review (PowerShell port).
+    CI runner for Claude Code review.
 
 .DESCRIPTION
-    Reviews a pull request diff using Claude Code in non-interactive
-    mode and produces structured JSON findings.
+    Runs Claude Code non-interactively (-p flag) against a PR diff and
+    produces structured JSON findings.
 
     Per Task 3.6:
-    - -p / --print runs Claude Code non-interactively (required for CI)
+    - -p / --print runs Claude Code non-interactively
     - --output-format json produces machine-parseable output
-    - --json-schema validates output against a schema file
+    - --json-schema validates output against the schema
 
 .PARAMETER BaseSha
-    The base commit SHA to diff against (typically the PR base branch HEAD).
+    The base commit SHA to diff against.
 
 .EXAMPLE
-    .\scripts\run_ci_review.ps1 abc1234
+    .\scripts\run_ci_review.ps1 HEAD
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
@@ -24,23 +24,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Configuration
 $SchemaPath = ".claude/schemas/review-findings.json"
 $OutputFile = "review-findings.json"
 
-# Verify the schema file exists before running anything expensive
 if (-not (Test-Path $SchemaPath)) {
-    Write-Error "Schema file not found at $SchemaPath. Cannot run review."
+    Write-Error "Schema file not found at $SchemaPath."
     exit 2
 }
 
-# Compute the diff against the PR base
-Write-Host "Computing diff from $BaseSha..HEAD..."
+Write-Host "Computing diff from $BaseSha..."
+
+# Try a commit-range diff first
 $Diff = git diff "$BaseSha..HEAD"
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "git diff failed. Is $BaseSha a valid commit in this repo?"
-    exit 2
+# If no committed changes, fall back to working-tree diff
+# (so locally-applied patches are picked up without needing to commit them)
+if ([string]::IsNullOrWhiteSpace($Diff)) {
+    Write-Host "No committed changes vs $BaseSha. Checking working tree..."
+    $Diff = git diff $BaseSha
 }
 
 if ([string]::IsNullOrWhiteSpace($Diff)) {
@@ -49,43 +50,69 @@ if ([string]::IsNullOrWhiteSpace($Diff)) {
     exit 0
 }
 
-# Build the prompt as a here-string for readability
 $Prompt = @"
-Review the following pull request diff against the team's review criteria
-in .claude/CLAUDE.md and .claude/commands/review.md.
+Review the following pull request diff against the team's review
+criteria in .claude/CLAUDE.md and .claude/commands/review.md.
 
-Produce structured findings via the submit_review_findings tool. Only flag
-issues that meet the explicit criteria in the review command — do not flag
-minor stylistic concerns.
+Produce structured JSON findings matching .claude/schemas/review-findings.json.
+Only flag issues that meet the explicit criteria — do not flag minor
+stylistic concerns.
 
 DIFF:
 ``````diff
-$Diff
+`$Diff
 ``````
 "@
 
-# Run Claude Code non-interactively with structured output.
-# We capture stdout and write it to the output file.
-Write-Host "Invoking Claude Code review..."
-$ClaudeOutput = claude -p $Prompt `
-    --output-format json `
-    --json-schema $SchemaPath
+# Write the prompt to a temporary file to avoid PowerShell's
+# argument-splitting quirks with multi-line strings passed to
+# external commands.
+$PromptFile = [System.IO.Path]::GetTempFileName()
+try {
+    [System.IO.File]::WriteAllText(
+        $PromptFile,
+        $Prompt,
+        (New-Object System.Text.UTF8Encoding $false)
+    )
+
+    Write-Host "Invoking Claude Code review..."
+    $PromptContent = Get-Content $PromptFile -Raw
+
+    $job = Start-Job -ScriptBlock {
+        param($prompt, $schema)
+        $prompt | claude -p --output-format json --json-schema $schema
+    } -ArgumentList $PromptContent, $SchemaPath
+
+    if (Wait-Job $job -Timeout 300) {
+        $ClaudeOutput = Receive-Job $job
+    } else {
+        Stop-Job $job
+        Remove-Job $job -Force
+        Write-Error "Claude Code timed out after 5 minutes."
+        exit 4
+    }
+    Remove-Job $job -Force
+}
+finally {
+    # Clean up the temp file even if claude errors out
+    if (Test-Path $PromptFile) {
+        Remove-Item $PromptFile -Force
+    }
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Claude Code invocation failed with exit code $LASTEXITCODE"
     exit 3
 }
 
-# Persist the output
 $ClaudeOutput | Set-Content -Path $OutputFile -Encoding UTF8
 Write-Host "Review complete. Findings written to $OutputFile"
 
-# Inspect findings for blocker severity
 try {
     $Findings = $ClaudeOutput | ConvertFrom-Json
 }
 catch {
-    Write-Error "Claude's output could not be parsed as JSON. Schema enforcement may have failed."
+    Write-Error "Claude's output could not be parsed as JSON."
     exit 3
 }
 
@@ -93,7 +120,7 @@ $Blockers = @($Findings.findings | Where-Object { $_.severity -eq "blocker" })
 
 if ($Blockers.Count -gt 0) {
     Write-Host ""
-    Write-Host "BLOCKER-severity findings present ($($Blockers.Count)). Failing the build."
+    Write-Host "BLOCKER findings present ($($Blockers.Count)). Failing the build."
     foreach ($b in $Blockers) {
         Write-Host "  - $($b.location.file):$($b.location.line) - $($b.issue)"
     }

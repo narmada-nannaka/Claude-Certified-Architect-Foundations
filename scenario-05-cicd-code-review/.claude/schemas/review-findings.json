@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PR Review Findings",
+  "type": "object",
+  "required": ["summary", "findings"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "1-2 sentence assessment. State approve / approve with comments / request changes."
+    },
+    "findings": {
+      "type": "array",
+      "description": "List of issues. Empty array if none.",
+      "items": {
+        "type": "object",
+        "required": ["severity", "location", "issue", "suggested_fix"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["blocker", "major", "minor"]
+          },
+          "location": {
+            "type": "object",
+            "required": ["file", "line"],
+            "properties": {
+              "file": {"type": "string"},
+              "line": {"type": "integer"}
+            }
+          },
+          "issue": {"type": "string"},
+          "suggested_fix": {"type": "string"},
+          "detected_pattern": {"type": "string"}
+        }
+      }
+    },
+    "what_looks_good": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}
