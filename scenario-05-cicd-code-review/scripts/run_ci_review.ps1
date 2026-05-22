@@ -34,15 +34,18 @@ if (-not (Test-Path $SchemaPath)) {
 
 Write-Host "Computing diff from $BaseSha..."
 
-# Try a commit-range diff first
-$Diff = git diff "$BaseSha..HEAD"
+# git diff returns a string array (one per line); join into a single string
+$DiffLines = git diff "$BaseSha..HEAD"
+$Diff = if ($DiffLines) { $DiffLines -join "`n" } else { "" }
 
-# If no committed changes, fall back to working-tree diff
-# (so locally-applied patches are picked up without needing to commit them)
 if ([string]::IsNullOrWhiteSpace($Diff)) {
     Write-Host "No committed changes vs $BaseSha. Checking working tree..."
-    $Diff = git diff $BaseSha
+    $DiffLines = git diff $BaseSha
+    $Diff = if ($DiffLines) { $DiffLines -join "`n" } else { "" }
 }
+
+# Debug visibility (remove later)
+Write-Host "Diff length captured: $($Diff.Length) characters"
 
 if ([string]::IsNullOrWhiteSpace($Diff)) {
     Write-Host "No changes to review."
