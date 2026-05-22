@@ -79,22 +79,28 @@ try {
     )
 
     Write-Host "Invoking Claude Code review..."
-    $PromptContent = Get-Content $PromptFile -Raw
+    Write-Host "Calling claude..."
+    $ClaudeOutput = claude -p $PromptContent `
+        --output-format json `
+        --json-schema $SchemaPath
 
-    $job = Start-Job -ScriptBlock {
-        param($prompt, $schema)
-        $prompt | claude -p --output-format json --json-schema $schema
-    } -ArgumentList $PromptContent, $SchemaPath
-
-    if (Wait-Job $job -Timeout 300) {
-        $ClaudeOutput = Receive-Job $job
+    Write-Host ""
+    Write-Host "=== ClaudeOutput type: $($ClaudeOutput.GetType().Name) ==="
+    if ($ClaudeOutput -is [array]) {
+        Write-Host "ClaudeOutput is an array with $($ClaudeOutput.Count) elements"
+        Write-Host "First 500 chars of joined output:"
+        $joined = $ClaudeOutput -join "`n"
+        Write-Host $joined.Substring(0, [Math]::Min(500, $joined.Length))
+        Write-Host "..."
+        # Re-join into a single string for downstream processing
+        $ClaudeOutput = $joined
     } else {
-        Stop-Job $job
-        Remove-Job $job -Force
-        Write-Error "Claude Code timed out after 5 minutes."
-        exit 4
+        Write-Host "ClaudeOutput is a single string of $($ClaudeOutput.Length) chars"
+        Write-Host "First 500 chars:"
+        Write-Host $ClaudeOutput.Substring(0, [Math]::Min(500, $ClaudeOutput.Length))
     }
-    Remove-Job $job -Force
+    Write-Host "=== End ClaudeOutput debug ==="
+    Write-Host ""
 }
 finally {
     # Clean up the temp file even if claude errors out
